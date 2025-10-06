@@ -1,0 +1,7 @@
+fileblok.detail:
+  path: '/verkeersinformatie'
+  defaults:
+    _controller: '\Drupal\fileblok\Controller\FileblokController::detail'
+    _title: 'Verkeersinformatie'
+  requirements:
+    _permission: 'access content'

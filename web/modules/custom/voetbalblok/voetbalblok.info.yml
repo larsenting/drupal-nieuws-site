@@ -1,0 +1,5 @@
+name: 'Voetbalblok'
+type: module
+description: 'Toont voetbalnieuws en uitslagen (football-data.org). Handmatig te plaatsen naast Weerblok.'
+core_version_requirement: ^11
+package: Custom

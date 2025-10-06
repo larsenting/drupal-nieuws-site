@@ -1,0 +1,44 @@
+{
+  "files": [
+    {
+      "locatie": "A1 Amsterdam – Amersfoort",
+      "lengte": "8 km",
+      "vertraging": "15 min"
+    },
+    {
+      "locatie": "A4 Rotterdam – Den Haag",
+      "lengte": "3 km",
+      "vertraging": "5 min"
+    },
+    {
+      "locatie": "A12 Den Haag – Utrecht",
+      "lengte": "7 km",
+      "vertraging": "20 min"
+    },
+    {
+      "locatie": "A27 Breda – Utrecht",
+      "lengte": "6 km",
+      "vertraging": "12 min"
+    },
+    {
+      "locatie": "A15 Rotterdam – Nijmegen",
+      "lengte": "10 km",
+      "vertraging": "25 min"
+    },
+    {
+      "locatie": "A20 Gouda – Rotterdam",
+      "lengte": "4 km",
+      "vertraging": "7 min"
+    },
+    {
+      "locatie": "A28 Zwolle – Amersfoort",
+      "lengte": "9 km",
+      "vertraging": "18 min"
+    },
+    {
+      "locatie": "A50 Arnhem – Eindhoven",
+      "lengte": "12 km",
+      "vertraging": "30 min"
+    }
+  ]
+}

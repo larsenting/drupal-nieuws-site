@@ -1,0 +1,65 @@
+/* Weerblok - 3 day forecast, compact card grid */
+.weerblok {
+  background: #f9f9f9;
+  border-radius: 6px;
+  padding: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+  font-size: 13px;
+}
+
+.weerblok-title {
+  font-size: 15px;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+/* grid: 3 cards */
+.weer-forecast {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+/* single day card */
+.weer-day {
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 8px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.weer-day-name {
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.weer-icon {
+  width: 48px;
+  height: 48px;
+  display: block;
+  margin: 0 auto 6px auto;
+}
+
+.weer-day-temp {
+  color: #0b79d0;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.weer-day-cond {
+  font-size: 12px;
+  color: #444;
+}
+
+/* Responsive: stack on small screens */
+@media (max-width: 640px) {
+  .weer-forecast {
+    grid-template-columns: 1fr;
+  }
+  .weer-icon {
+    width: 40px;
+    height: 40px;
+  }
+}

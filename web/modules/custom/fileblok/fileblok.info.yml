@@ -1,0 +1,6 @@
+name: 'Fileblok'
+type: module
+description: 'Blok met verkeersinformatie'
+core_version_requirement: ^11
+package: Custom
+dependencies: []

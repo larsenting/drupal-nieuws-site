@@ -1,0 +1,108 @@
+/* Voetbalblok - consistent styling with weerblok */
+.voetbalblok {
+  background-color: #f9f9f9;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+  font-size: 14px;
+  color: #111;
+}
+
+.vb-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.vb-icon {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.vb-title {
+  font-size: 16px;
+  margin: 0;
+}
+
+.vb-section h4 {
+  font-size: 13px;
+  margin: 6px 0;
+  color: #222;
+}
+
+.vb-news-item {
+  margin-bottom: 8px;
+}
+
+.vb-news-title {
+  display: block;
+  font-weight: 600;
+}
+
+.vb-news-intro {
+  font-size: 13px;
+  color: #555;
+}
+
+.vb-score-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vb-score-item {
+  font-size: 13px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+.vb-score-item:first-child {
+  border-top: none;
+}
+
+.vb-match {
+  font-weight: 600;
+}
+
+.vb-score {
+  margin-left: 8px;
+  font-weight: 700;
+  color: #0b79d0;
+}
+
+.vb-more {
+  margin-top: 8px;
+}
+
+.vb-more a {
+  font-size: 13px;
+  color: #0b79d0;
+  text-decoration: none;
+}
+
+
+/* controller */
+.voetbal-cat {
+  background: #fff;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.vc-day {
+  margin-bottom: 12px;
+}
+
+.vc-day-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
+.vc-match-item {
+  border-top: 1px solid #eee;
+  padding: 4px 0;
+  font-size: 14px;
+}

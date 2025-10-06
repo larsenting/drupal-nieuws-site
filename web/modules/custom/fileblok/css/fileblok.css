@@ -1,0 +1,70 @@
+/* ================================
+   Sidebar Fileblok
+   ================================ */
+.fileblok {
+  background-color: #f0f0f0;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  display: inline-block;
+  width: 100%;
+}
+
+.fileblok h2 {
+  font-size: 16px; /* kleinere header voor sidebar */
+  margin-bottom: 10px;
+}
+
+.file-item {
+  margin-bottom: 10px;
+}
+
+.file-item strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+/* ================================
+   Detailpagina Fileblok
+   ================================ */
+.fileblok-page {
+  display: flex;
+  align-items: flex-start; /* afbeelding en tekst op één lijn */
+  gap: 20px; /* ruimte tussen afbeelding en tekst */
+}
+
+.fileblok-text {
+  text-align: center; /* tekst centreren */
+}
+
+.fileblok-image {
+  width: 300px;               /* vaste breedte voor afbeelding */
+  flex-shrink: 0;             /* voorkomt dat de afbeelding krimpt */
+}
+
+.fileblok-image img {
+  width: 100%;
+  height: auto;
+  border-radius: 5px;
+  display: block;
+}
+
+/* ================================
+   Responsiveness
+   ================================ */
+@media (max-width: 768px) {
+  .fileblok-page {
+    flex-direction: column;   /* op mobiel afbeelding boven tekst */
+    align-items: center;
+  }
+
+  .fileblok-image {
+    width: 90%;
+    margin-bottom: 15px;      /* marge tussen afbeelding en tekst */
+  }
+
+  .fileblok-text {
+    width: 90%;
+    text-align: center;       /* tekst centreren op mobiel */
+  }
+}

@@ -1,0 +1,5 @@
+name: 'Feedbackblok'
+type: module
+description: 'Toont feedbackblok'
+core_version_requirement: ^11
+package: Custom

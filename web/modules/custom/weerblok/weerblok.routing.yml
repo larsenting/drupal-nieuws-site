@@ -1,0 +1,7 @@
+weerblok.weerdata:
+  path: '/weerdata'
+  defaults:
+    _controller: '\Drupal\weerblok\Controller\WeerblokController::weerData'
+    _title: 'Het weer'
+  requirements:
+    _permission: 'access content'

@@ -1,0 +1,5 @@
+name: Weerblok
+type: module
+description: 'Toont het huidige weer in een block.'
+core_version_requirement: ^11
+package: Custom

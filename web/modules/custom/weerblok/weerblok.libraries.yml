@@ -1,0 +1,4 @@
+weerblok.styles:
+  css:
+    theme:
+      css/weerblok.css: {}

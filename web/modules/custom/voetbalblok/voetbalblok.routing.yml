@@ -1,0 +1,7 @@
+voetbalblok.category:
+  path: '/categorie/voetbal/extra'
+  defaults:
+    _controller: '\Drupal\voetbalblok\Controller\VoetbalCategoryController::content'
+    _title: 'Extra voetbalinformatie'
+  requirements:
+    _permission: 'access content'

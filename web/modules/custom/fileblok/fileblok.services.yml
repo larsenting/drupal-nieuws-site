@@ -1,0 +1,4 @@
+services:
+  fileblok.service:
+    class: Drupal\fileblok\FileblokService
+    arguments: ['@http_client']
