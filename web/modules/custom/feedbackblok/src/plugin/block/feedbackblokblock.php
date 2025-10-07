@@ -1,11 +1,12 @@
 <?php
 
-namespace Web\Modules\Custom\Feedbackblok\Src\Plugin\Block;
+namespace Drupal\feedbackblok\Plugin\Block;
 
 use Drupal\Core\Block\BlockBase;
+use Drupal\Core\Render\Markup;
 
 /**
- * Blok dat het feedbackformulier toont.
+ * Provides a 'Feedbackblok' Block.
  *
  * @Block(
  *   id = "feedbackblok",
@@ -15,49 +16,32 @@ use Drupal\Core\Block\BlockBase;
  */
 class FeedbackblokBlock extends BlockBase {
 
-  /**
-   * {@inheritdoc}
-   */
   public function build() {
-    return [
-      '#markup' => '
-        <div class="feedback-block">
-          <h3>Laat een review achter</h3>
-          <form class="feedback-form" method="post" onsubmit="event.preventDefault(); alert(\'Bedankt voor je feedback!\'); this.reset();">
-
-            <div class="form-item">
-              <label for="review">Review</label><br/>
-              <textarea id="review" name="review" rows="3" required></textarea>
-            </div>
-
-            <div class="form-item rating">
-              <label>Sterren:</label><br/>
-              <span class="star-rating">
-                <input type="radio" id="5-stars" name="rating" value="5" required/><label for="5-stars">&#9733;</label>
-                <input type="radio" id="4-stars" name="rating" value="4"/><label for="4-stars">&#9733;</label>
-                <input type="radio" id="3-stars" name="rating" value="3"/><label for="3-stars">&#9733;</label>
-                <input type="radio" id="2-stars" name="rating" value="2"/><label for="2-stars">&#9733;</label>
-                <input type="radio" id="1-star" name="rating" value="1"/><label for="1-star">&#9733;</label>
-              </span>
-            </div>
-
-            <button type="submit">Verstuur</button>
-          </form>
+    $html = '
+      <div class="feedback-block">
+        <h3>Beoordeel ons</h3>
+        <div class="star-rating" data-selected="0">
+          <span data-value="1">&#9733;</span>
+          <span data-value="2">&#9733;</span>
+          <span data-value="3">&#9733;</span>
+          <span data-value="4">&#9733;</span>
+          <span data-value="5">&#9733;</span>
         </div>
-      ',
+      </div>
+    ';
+
+    return [
+      '#markup' => Markup::create($html),
       '#attached' => [
         'library' => [
-          'feedbackblok/feedbackblok.css',
+          'feedbackblok/feedbackblok.styles',
+          'feedbackblok/feedbackblok.script',
         ],
       ],
     ];
   }
 
-  /**
-   * {@inheritdoc}
-   */
   public function getCacheMaxAge() {
     return 0;
   }
-
 }

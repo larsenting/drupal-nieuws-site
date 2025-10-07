@@ -1,0 +1,35 @@
+.feedback-block {
+  text-align: center;
+  padding: 20px;
+  font-family: sans-serif;
+}
+
+.feedback-block h3 {
+  margin-bottom: 10px;
+  font-size: 1.2em;
+}
+
+.star-rating {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  justify-content: center;
+  gap: 6px;
+  font-size: 2.5rem;
+}
+
+.star-rating span {
+  color: #ccc;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.1s ease;
+}
+
+.star-rating span:hover,
+.star-rating span:hover ~ span {
+  color: #f5b301; 
+  transform: scale(1.2);
+}
+
+.star-rating span.selected,
+.star-rating span.selected ~ span {
+  color: #ffcc00; 
+}
