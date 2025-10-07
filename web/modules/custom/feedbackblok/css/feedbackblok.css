@@ -23,13 +23,27 @@
   transition: color 0.2s ease, transform 0.1s ease;
 }
 
+
 .star-rating span:hover,
 .star-rating span:hover ~ span {
-  color: #f5b301; 
+  color: #f5b301;
   transform: scale(1.2);
 }
 
 .star-rating span.selected,
 .star-rating span.selected ~ span {
-  color: #ffcc00; 
+  color: #ffcc00;
+}
+
+
+
+.send-review-btn {
+}
+
+.star.one:nth-child(-n+5),
+.star.two:nth-child(-n+4),
+.star.three:nth-child(-n+3),
+.star.four:nth-child(-n+2),
+.star.five:nth-child(n) {
+  color: #ffcc00;
 }

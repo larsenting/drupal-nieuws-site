@@ -20,13 +20,15 @@ class FeedbackblokBlock extends BlockBase {
     $html = '
       <div class="feedback-block">
         <h3>Beoordeel ons</h3>
-        <div class="star-rating" data-selected="0">
-          <span data-value="1">&#9733;</span>
-          <span data-value="2">&#9733;</span>
-          <span data-value="3">&#9733;</span>
-          <span data-value="4">&#9733;</span>
-          <span data-value="5">&#9733;</span>
+        <h3 id="output">Beoordeling is: 0/5</h3>
+        <div class="star-rating">
+          <span onclick="gfg(5)" class="star">&#9733;</span>
+          <span onclick="gfg(4)" class="star">&#9733;</span>
+          <span onclick="gfg(3)" class="star">&#9733;</span>
+          <span onclick="gfg(2)" class="star">&#9733;</span>
+          <span onclick="gfg(1)" class="star">&#9733;</span>
         </div>
+        <button class="send-review-btn" type="button">Verstuur</button>
       </div>
     ';
 
