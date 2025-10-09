@@ -24,6 +24,8 @@
         "drupal/gin": "^5.0",
         "drupal/paragraphs": "^1.19",
         "drupal/statistics": "^1.0",
+        "drupal/token": "^1.16",
+        "drupal/webform": "^6.3@beta",
         "drush/drush": "^13.6"
     },
     "conflict": {

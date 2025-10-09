@@ -6,29 +6,19 @@ use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use GuzzleHttp\ClientInterface;
 use Drupal\Component\Utility\Html;
-use Drupal\Core\Site\Settings;
 
 /**
- * Controller for extra voetbalinformatie op de categoriepagina.
+ * Controller that renders extra voetbalinformatie on /categorie/voetbal.
  */
 class VoetbalCategoryController extends ControllerBase {
 
-  /**
-   * @var \GuzzleHttp\ClientInterface
-   */
   protected ClientInterface $httpClient;
+  protected $settings;
 
-  /**
-   * @var \Drupal\Core\Site\Settings
-   */
-  protected Settings $settings;
+  protected string $fallbackKey = '15f6c4cec3msh10ed9ea02bba506p104697jsn4aca691e7a00';
+  protected string $fallbackHost = 'free-api-live-football-data.p.rapidapi.com';
 
-  /**
-   * API key fallback.
-   */
-  protected string $fallbackApiKey = 'e23c33ccb028410799a7220b54aec3bb';
-
-  public function __construct(ClientInterface $http_client, Settings $settings) {
+  public function __construct(ClientInterface $http_client, $settings) {
     $this->httpClient = $http_client;
     $this->settings = $settings;
   }
@@ -40,76 +30,124 @@ class VoetbalCategoryController extends ControllerBase {
     );
   }
 
-  /**
-   * Haalt en toont extra voetbalinformatie.
-   */
-  public function content() {
-    $apiKey = $this->getApiKey();
-    if (empty($apiKey)) {
-      return [
-        '#markup' => '<div class="voetbal-cat-error">' . Html::escape($this->t('Voetbal API-sleutel ontbreekt.')) . '</div>',
-      ];
-    }
-
-    $today = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-    $dateFrom = $today->format('Y-m-d');
-    $dateTo = $today->modify('+7 days')->format('Y-m-d');
-
-    $endpoint = 'https://api.football-data.org/v4/matches';
-    $headers = ['X-Auth-Token' => $apiKey, 'Accept' => 'application/json'];
-
+  protected function getRapidApiKey(): ?string {
     try {
-      $response = $this->httpClient->request('GET', $endpoint, [
-        'headers' => $headers,
-        'query' => ['dateFrom' => $dateFrom, 'dateTo' => $dateTo],
-        'timeout' => 10,
-      ]);
-      $payload = json_decode($response->getBody()->getContents(), TRUE);
+      if (method_exists($this->settings, 'get')) {
+        $k = $this->settings->get('voetbalblok.rapidapi_key');
+        if (!empty($k)) {
+          return $k;
+        }
+      }
+    } catch (\Throwable $e) {}
+    $env = getenv('VOETBALBLOK_RAPIDAPI_KEY') ?: getenv('RAPIDAPI_KEY');
+    if (!empty($env)) {
+      return $env;
     }
-    catch (\Throwable $e) {
-      \Drupal::logger('voetbalblok')->error('Error fetching voetbal data: @m', ['@m' => $e->getMessage()]);
+    return $this->fallbackKey;
+  }
+
+  protected function getRapidApiHost(): string {
+    try {
+      if (method_exists($this->settings, 'get')) {
+        $h = $this->settings->get('voetbalblok.rapidapi_host');
+        if (!empty($h)) {
+          return $h;
+        }
+      }
+    } catch (\Throwable $e) {}
+    return getenv('VOETBALBLOK_RAPIDAPI_HOST') ?: getenv('RAPIDAPI_HOST') ?: $this->fallbackHost;
+  }
+
+  /**
+   * Fetch matches similar to block (reuse logic).
+   */
+  protected function fetchMatches(string $from, string $to): array {
+    $host = $this->getRapidApiHost();
+    $key = $this->getRapidApiKey();
+    $base = 'https://' . $host;
+    $endpoints = ['/matches', '/fixtures', '/livescores'];
+
+    foreach ($endpoints as $endpoint) {
+      try {
+        $res = $this->httpClient->request('GET', rtrim($base, '/') . $endpoint, [
+          'headers' => [
+            'x-rapidapi-key' => $key,
+            'x-rapidapi-host' => $host,
+            'Accept' => 'application/json',
+          ],
+          'query' => [
+            'dateFrom' => $from,
+            'dateTo' => $to,
+          ],
+          'timeout' => 10,
+        ]);
+        if ($res->getStatusCode() !== 200) {
+          continue;
+        }
+        $json = json_decode($res->getBody()->getContents(), TRUE);
+        if (isset($json['matches'])) {
+          return $json['matches'];
+        }
+        if (isset($json['response'])) {
+          return $json['response'];
+        }
+        if (isset($json['data'])) {
+          return $json['data'];
+        }
+        if (is_array($json) && !empty($json)) {
+          return $json;
+        }
+      } catch (\Throwable $e) {
+        \Drupal::logger('voetbalblok')->notice('fetchMatches error: @m', ['@m' => $e->getMessage()]);
+        continue;
+      }
+    }
+    return [];
+  }
+
+  public function content() {
+    $today = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+    $from = $today->format('Y-m-d');
+    $to = $today->modify('+7 days')->format('Y-m-d');
+
+    $matches = $this->fetchMatches($from, $to);
+
+    if (empty($matches)) {
       return [
-        '#markup' => '<div class="voetbal-cat-error">' . Html::escape($this->t('Voetbaldata tijdelijk niet beschikbaar.')) . '</div>',
+        '#markup' => '<div class="voetbal-cat-empty">' . Html::escape($this->t('Geen voetbaldata beschikbaar.')) . '</div>',
       ];
     }
 
-    $matches = $payload['matches'] ?? [];
-    if (empty($matches)) {
-      return ['#markup' => '<div class="voetbal-cat-empty">' . Html::escape($this->t('Geen wedstrijden gevonden.')) . '</div>'];
-    }
-
-    // Groeperen per dag (NL tijdzone)
     $tz = new \DateTimeZone('Europe/Amsterdam');
     $grouped = [];
     foreach ($matches as $m) {
-      if (empty($m['utcDate'])) {
-        continue;
+      if (empty($m['utcDate']) && !empty($m['fixture']['utcDate'])) {
+        $utc = $m['fixture']['utcDate'];
+      } else {
+        $utc = $m['utcDate'] ?? null;
       }
-      $dt = new \DateTimeImmutable($m['utcDate']);
+      $dt = $utc ? new \DateTimeImmutable($utc) : new \DateTimeImmutable('now');
       $key = $dt->setTimezone($tz)->format('Y-m-d');
       $grouped[$key][] = $m;
     }
 
-    // Build markup
     $out = '<div class="voetbal-cat">';
     $out .= '<h2>' . Html::escape($this->t('Extra voetbalinformatie')) . '</h2>';
     foreach ($grouped as $date => $list) {
       $displayDate = (new \DateTimeImmutable($date))->format('D d M');
       $out .= '<div class="vc-day"><div class="vc-day-title">' . Html::escape($displayDate) . '</div><ul>';
-      foreach ($list as $match) {
-        $home = $match['homeTeam']['name'] ?? 'Thuis';
-        $away = $match['awayTeam']['name'] ?? 'Uit';
-        $dt = new \DateTimeImmutable($match['utcDate']);
-        $time = $dt->setTimezone($tz)->format('H:i');
+      foreach ($list as $mm) {
+        $home = $mm['homeTeam']['name'] ?? ($mm['teams'][0]['name'] ?? ($mm['fixture']['homeTeam']['name'] ?? 'Home'));
+        $away = $mm['awayTeam']['name'] ?? ($mm['teams'][1]['name'] ?? ($mm['fixture']['awayTeam']['name'] ?? 'Away'));
+        $utc = $mm['utcDate'] ?? ($mm['fixture']['utcDate'] ?? null);
+        $time = $utc ? (new \DateTimeImmutable($utc))->setTimezone($tz)->format('H:i') : '';
+        $status = $mm['status'] ?? ($mm['fixture']['status'] ?? '');
+        $scoreHome = $mm['score']['fullTime']['home'] ?? ($mm['fixture']['result']['home'] ?? null);
+        $scoreAway = $mm['score']['fullTime']['away'] ?? ($mm['fixture']['result']['away'] ?? null);
 
-        $status = $match['status'] ?? '';
-        $scoreHome = $match['score']['fullTime']['home'] ?? '';
-        $scoreAway = $match['score']['fullTime']['away'] ?? '';
-        $scoreText = ($status === 'FINISHED') ? "$scoreHome - $scoreAway" : $time;
+        $scoreText = ($status === 'FINISHED' && $scoreHome !== null && $scoreAway !== null) ? ($scoreHome . ' - ' . $scoreAway) : ($status === 'IN_PLAY' ? $this->t('Live') : ($time ?: $this->t('TBD')));
 
-        $out .= '<li class="vc-match-item">'
-          . Html::escape($home) . ' - ' . Html::escape($away)
-          . ' (' . Html::escape($scoreText) . ')</li>';
+        $out .= '<li class="vc-match-item"><span class="vc-time">' . Html::escape($time) . '</span> <span class="vc-teams"><strong>' . Html::escape($home) . '</strong> - ' . Html::escape($away) . '</span> <span class="vc-score">' . Html::escape($scoreText) . '</span></li>';
       }
       $out .= '</ul></div>';
     }
@@ -118,20 +156,12 @@ class VoetbalCategoryController extends ControllerBase {
     return [
       '#type' => 'markup',
       '#markup' => $out,
-      '#attached' => ['library' => ['voetbalblok/voetbalblok.styles']],
+      '#attached' => [
+        'library' => ['voetbalblok/voetbalblok.styles'],
+      ],
+      '#cache' => [
+        'max-age' => 120,
+      ],
     ];
   }
-
-  protected function getApiKey(): ?string {
-    $k = $this->settings->get('voetbalblok.api_key');
-    if (!empty($k)) {
-      return $k;
-    }
-    $env = getenv('VOETBALBLOK_API_KEY');
-    if (!empty($env)) {
-      return $env;
-    }
-    return $this->fallbackApiKey;
-  }
-
 }

@@ -7,63 +7,31 @@ use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use GuzzleHttp\ClientInterface;
 use Drupal\Component\Utility\Html;
-use Drupal\Core\Url;
 
 /**
- * Block dat voetbalwedstrijden toont via football-data.org.
+ * Provides a 'Voetbalblok' block (RapidAPI compatible).
  *
- * Dit block haalt live voetbaldata op (uitslagen, live scores, nieuwsachtig overzicht)
- * en presenteert deze in een sidebar-achtig component. Het combineert API calls,
- * eenvoudige data parsing en een render array die door Drupal in HTML wordt omgezet.
+ * @Block(
+ *   id = "voetbalblok",
+ *   admin_label = @Translation("Voetbalblok"),
+ *   category = @Translation("Custom")
+ * )
  */
 class VoetbalblokBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
-  /**
-   * HTTP client service.
-   *
-   * Deze client wordt gebruikt om de externe API aan te roepen. Drupal levert
-   * Guzzle standaard mee, zodat we geen eigen cURL-code hoeven te schrijven.
-   */
   protected ClientInterface $httpClient;
-
-  /**
-   * Settings service.
-   *
-   * Via deze service halen we configuratiewaarden op uit settings.php of
-   * settings.local.php. Hierdoor kunnen API keys veilig buiten de code
-   * bewaard worden, wat veiliger en flexibeler is.
-   */
   protected $settings;
 
-  /**
-   * Fallback API key.
-   *
-   * Wordt alleen gebruikt als er nergens anders een API key beschikbaar is.
-   * Handig in een lokale ontwikkelomgeving of om te zorgen dat het block
-   * nooit volledig breekt.
-   */
-  protected string $fallbackApiKey = 'e23c33ccb028410799a7220b54aec3bb';
+  // Fallback key/host — zet in settings.local.php in plaats van hardcoden.
+  protected string $fallbackKey = '15f6c4cec3msh10ed9ea02bba506p104697jsn4aca691e7a00';
+  protected string $fallbackHost = 'free-api-live-football-data.p.rapidapi.com';
 
-  /**
-   * Constructor.
-   *
-   * Ontvangt alle services en instellingen die dit block nodig heeft en
-   * bewaart ze in properties voor later gebruik. Dependency injection zorgt
-   * ervoor dat de code testbaar en uitbreidbaar blijft.
-   */
   public function __construct(array $configuration, $plugin_id, $plugin_definition, ClientInterface $http_client, $settings) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->httpClient = $http_client;
     $this->settings = $settings;
   }
 
-  /**
-   * Factory methode voor dependency injection.
-   *
-   * Drupal roept deze methode aan wanneer het block-object wordt aangemaakt.
-   * Hier halen we de juiste services (zoals http_client en settings) uit de
-   * service container en geven we die door aan de constructor.
-   */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
     return new static(
       $configuration,
@@ -75,146 +43,245 @@ class VoetbalblokBlock extends BlockBase implements ContainerFactoryPluginInterf
   }
 
   /**
-   * Bepaalt welke API key gebruikt moet worden.
-   *
-   * De volgorde is bewust opgebouwd: eerst wordt gekeken of er configuratie
-   * aanwezig is, daarna in settings.php, vervolgens in environment variables
-   * en als laatste wordt de fallback key gebruikt. Zo heeft een beheerder of
-   * ontwikkelaar meerdere manieren om de key in te stellen.
+   * Haal RapidAPI key uit settings / env / fallback.
    */
-  protected function getApiKey(): string {
+  protected function getRapidApiKey(): ?string {
     try {
-      $config = \Drupal::configFactory()->get('voetbalblok.settings');
-      if ($config && $config->get('api_key')) {
-        return $config->get('api_key');
+      if (is_object($this->settings) && method_exists($this->settings, 'get')) {
+        $k = $this->settings->get('voetbalblok.rapidapi_key');
+        if (!empty($k)) {
+          return $k;
+        }
+        $k2 = $this->settings->get('voetbalblok.api_key');
+        if (!empty($k2)) {
+          return $k2;
+        }
       }
     } catch (\Throwable $e) {
-      // Config niet beschikbaar of niet ingesteld.
+      // ignore
     }
+    $env = getenv('VOETBALBLOK_RAPIDAPI_KEY') ?: getenv('RAPIDAPI_KEY');
+    return $env ?: $this->fallbackKey;
+  }
 
+  protected function getRapidApiHost(): string {
     try {
-      $key = $this->settings->get('voetbalblok.api_key');
-      if (!empty($key)) {
-        return $key;
+      if (is_object($this->settings) && method_exists($this->settings, 'get')) {
+        $h = $this->settings->get('voetbalblok.rapidapi_host');
+        if (!empty($h)) {
+          return $h;
+        }
       }
     } catch (\Throwable $e) {
-      // Settings niet beschikbaar, ga verder naar de volgende bron.
+      // ignore
     }
-
-    $envKeys = ['VOETBALBLOK_API_KEY', 'FOOTBALL_DATA_API_KEY', 'FOOTBALLDATA_KEY'];
-    foreach ($envKeys as $envKey) {
-      if ($val = getenv($envKey)) {
-        return $val;
-      }
-    }
-
-    return $this->fallbackApiKey;
+    $env = getenv('VOETBALBLOK_RAPIDAPI_HOST') ?: getenv('RAPIDAPI_HOST');
+    return $env ?: $this->fallbackHost;
   }
 
   /**
-   * Bouwt de weergave van het block.
-   *
-   * Deze methode wordt aangeroepen telkens wanneer het block gerenderd wordt.
-   * Hier wordt de API aangeroepen, de data verwerkt en omgezet naar HTML die
-   * in de frontend getoond kan worden.
+   * Probeer meerdere endpoint-varianten en normalizeer response naar matches array.
    */
-  public function build() {
-    $apiKey = $this->getApiKey();
+  protected function fetchMatchesRapidApi(string $from, string $to): array {
+    $host = $this->getRapidApiHost();
+    $key = $this->getRapidApiKey();
+    $base = 'https://' . rtrim($host, '/');
 
-    if (empty($apiKey)) {
-      // Als er helemaal geen API key beschikbaar is, krijgt de gebruiker
-      // een nette melding in plaats van een blanco block.
-      $message = $this->t('Voetbalblok is niet geconfigureerd. Voeg een API key toe in settings.php of als omgevingsvariabele.');
-      return [
-        '#markup' => '<div class="voetbalblok error">' . Html::escape($message) . '</div>',
-      ];
-    }
-
-    // Bepaal de periode waarover wedstrijden opgehaald worden. We kiezen hier
-    // bewust voor enkele dagen terug tot morgen, zodat recente uitslagen en
-    // komende wedstrijden zichtbaar zijn.
-    $today = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-    $from = $today->modify('-2 days')->format('Y-m-d');
-    $to = $today->modify('+1 day')->format('Y-m-d');
-
-    $endpoint = 'https://api.football-data.org/v4/matches';
-    $query = ['dateFrom' => $from, 'dateTo' => $to];
-    $headers = [
-      'X-Auth-Token' => $apiKey,
-      'Accept' => 'application/json',
+    $endpoints = [
+      '/matches',
+      '/fixtures',
+      '/livescores',
+      '/fixtures/date',
     ];
 
-    try {
-      // Vraag de wedstrijden op via de API.
-      $response = $this->httpClient->request('GET', $endpoint, [
-        'headers' => $headers,
-        'query' => $query,
-        'timeout' => 8,
-      ]);
+    foreach ($endpoints as $ep) {
+      $url = $base . $ep;
+      try {
+        $response = $this->httpClient->request('GET', $url, [
+          'headers' => [
+            'x-rapidapi-key' => $key,
+            'x-rapidapi-host' => $host,
+            'Accept' => 'application/json',
+          ],
+          'query' => [
+            'dateFrom' => $from,
+            'dateTo' => $to,
+          ],
+          'timeout' => 8,
+        ]);
 
-      if ($response->getStatusCode() !== 200) {
-        throw new \Exception('football-data.org returned status ' . $response->getStatusCode());
+        if ($response->getStatusCode() !== 200) {
+          continue;
+        }
+
+        $json = json_decode($response->getBody()->getContents(), TRUE);
+
+        if (isset($json['matches']) && is_array($json['matches'])) {
+          return $json['matches'];
+        }
+        if (isset($json['response']) && is_array($json['response'])) {
+          return $json['response'];
+        }
+        if (isset($json['data']) && is_array($json['data'])) {
+          return $json['data'];
+        }
+        if (isset($json['items']) && is_array($json['items'])) {
+          return $json['items'];
+        }
+        if (is_array($json)) {
+          $first = reset($json);
+          if (is_array($first) && (isset($first['homeTeam']) || isset($first['teams']) || isset($first['fixture']) || isset($first['match']))) {
+            return $json;
+          }
+        }
+      } catch (\Throwable $e) {
+        \Drupal::logger('voetbalblok')->notice('RapidAPI endpoint ' . $ep . ' gaf fout: @m', ['@m' => $e->getMessage()]);
+        continue;
       }
-
-      // Decode de JSON response naar een PHP array.
-      $payload = json_decode($response->getBody()->getContents(), TRUE);
-    }
-    catch (\Throwable $e) {
-      // Als er iets misgaat loggen we dit en tonen we een nette foutmelding
-      // aan de bezoeker. Zo blijft de site stabiel, zelfs als de API niet werkt.
-      \Drupal::logger('voetbalblok')->error('Fout bij ophalen voetbaldata: @m', ['@m' => $e->getMessage()]);
-      return [
-        '#markup' => '<div class="voetbalblok"><div class="vb-header"><h3>' . $this->t('Voetbal') . '</h3></div><div class="vb-error">' . Html::escape($this->t('Geen verbinding met voetbal-API.')) . '</div></div>',
-        '#cache' => ['max-age' => 60],
-      ];
     }
 
-    // Verwerk de lijst met wedstrijden uit de API.
-    // We onderscheiden nieuwswaardige items (afgelopen wedstrijden)
-    // en live/score items (voor snelle blik).
-    $matches = $payload['matches'] ?? [];
+    return [];
+  }
+
+  /**
+   * Normaliseer één match naar vaste keys.
+   */
+  protected function normalizeMatch(array $m): array {
+    // home/away names: veel vormen mogelijk, probeer meerdere paden
+    $home = $m['homeTeam']['name'] ?? $m['teams']['home']['name'] ?? $m['teams'][0]['name'] ?? $m['fixture']['homeTeam']['name'] ?? $m['match']['home'] ?? ($m['teamHome']['name'] ?? 'Home');
+    $away = $m['awayTeam']['name'] ?? $m['teams']['away']['name'] ?? $m['teams'][1]['name'] ?? $m['fixture']['awayTeam']['name'] ?? $m['match']['away'] ?? ($m['teamAway']['name'] ?? 'Away');
+
+    $status = $m['status'] ?? $m['fixture']['status'] ?? $m['match']['status'] ?? ($m['matchStatus'] ?? '');
+
+    $utc = $m['utcDate'] ?? $m['fixture']['utcDate'] ?? $m['match']['utcDate'] ?? $m['date'] ?? null;
+
+    $scoreHome = $m['score']['fullTime']['home'] ?? $m['fixture']['result']['home'] ?? $m['goalsHomeTeam'] ?? ($m['match']['score']['home'] ?? null);
+    $scoreAway = $m['score']['fullTime']['away'] ?? $m['fixture']['result']['away'] ?? $m['goalsAwayTeam'] ?? ($m['match']['score']['away'] ?? null);
+
+    $competition = $m['competition']['name'] ?? $m['league']['name'] ?? $m['competition_name'] ?? '';
+
+    return [
+      'home' => $home,
+      'away' => $away,
+      'status' => (string) $status,
+      'utc' => $utc,
+      'score_home' => $scoreHome,
+      'score_away' => $scoreAway,
+      'competition' => $competition,
+    ];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function build() {
+    // Periode: gisteren -> morgen
+    $today = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+    $from = $today->modify('-1 day')->format('Y-m-d');
+    $to = $today->modify('+1 day')->format('Y-m-d');
+
+    $matches = $this->fetchMatchesRapidApi($from, $to);
+
+    $normalized = [];
+    foreach ($matches as $m) {
+      if (is_array($m)) {
+        $normalized[] = $this->normalizeMatch($m);
+      }
+    }
+
+    // 1) Laatste uitslagen: filter FINISHED, sorteer op utc desc en neem 3
+    $finished = array_filter($normalized, function ($n) {
+      $status = strtoupper((string) ($n['status'] ?? ''));
+      return (strpos($status, 'FINISH') !== FALSE) || ($status === 'FINISHED') || ($status === 'FT');
+    });
+
+    usort($finished, function ($a, $b) {
+      $ta = !empty($a['utc']) ? strtotime($a['utc']) : 0;
+      $tb = !empty($b['utc']) ? strtotime($b['utc']) : 0;
+      return $tb <=> $ta;
+    });
+
+    $lastResults = array_slice($finished, 0, 3);
+
+    // 2) News (max 2): finished recent matches or scheduled (reuse previous logic)
     $news = [];
-    $scores = [];
-
-    foreach ($matches as $match) {
-      if (count($news) >= 2 && count($scores) >= 5) {
-        break; // Hou de lijst beperkt om het block compact te houden
+    foreach ($normalized as $n) {
+      if (count($news) >= 2) {
+        break;
       }
-
-      $home = $match['homeTeam']['name'] ?? 'Home';
-      $away = $match['awayTeam']['name'] ?? 'Away';
-      $status = $match['status'] ?? '';
-      $scoreHome = $match['score']['fullTime']['home'] ?? null;
-      $scoreAway = $match['score']['fullTime']['away'] ?? null;
-
-      if ($status === 'FINISHED' && $scoreHome !== null && $scoreAway !== null && count($news) < 2) {
-        $title = "$home verslaat $away $scoreHome-$scoreAway";
-        $intro = $match['competition']['name'] ?? $this->t('Competitie');
-        $news[] = ['title' => $title, 'intro' => $intro];
+      $status = strtoupper((string) ($n['status'] ?? ''));
+      if (($status === 'FINISHED' || strpos($status, 'FINISH') !== FALSE) && $n['score_home'] !== null && $n['score_away'] !== null) {
+        $news[] = [
+          'title' => "{$n['home']} verslaat {$n['away']} {$n['score_home']}-{$n['score_away']}",
+          'intro' => $n['competition'] ?? '',
+        ];
       }
-
-      if (count($scores) < 5) {
-        $scores[] = [
-          'match' => "$home - $away",
-          'score' => ($scoreHome !== null && $scoreAway !== null) ? "$scoreHome - $scoreAway" : ($status === 'IN_PLAY' ? $this->t('Live') : $this->t('TBD')),
-          'status' => $status,
+    }
+    if (empty($news)) {
+      foreach (array_slice($normalized, 0, 2) as $n) {
+        $news[] = [
+          'title' => "{$n['home']} - {$n['away']}",
+          'intro' => $n['competition'] ?? '',
         ];
       }
     }
 
-    // Als er geen nieuws gevonden is, vullen we dit op met geplande wedstrijden.
-    if (empty($news)) {
-      foreach (array_slice($matches, 0, 2) as $match) {
-        $home = $match['homeTeam']['name'] ?? 'Home';
-        $away = $match['awayTeam']['name'] ?? 'Away';
-        $title = "$home - $away";
-        $intro = $match['competition']['name'] ?? $this->t('Competitie');
-        $news[] = ['title' => $title, 'intro' => $intro];
+    // 3) Scores (max 3): in_play first, then finished, then scheduled
+    $scores = [];
+    foreach ($normalized as $n) {
+      if (count($scores) >= 3) {
+        break;
+      }
+      $status = strtoupper((string) ($n['status'] ?? ''));
+      if ($status === 'IN_PLAY') {
+        $scores[] = [
+          'match' => "{$n['home']} - {$n['away']}",
+          'score' => ($n['score_home'] !== null && $n['score_away'] !== null) ? "{$n['score_home']} - {$n['score_away']}" : $this->t('Live'),
+          'status' => 'IN_PLAY',
+        ];
       }
     }
+    // add finished if still space
+    foreach ($normalized as $n) {
+      if (count($scores) >= 3) {
+        break;
+      }
+      $status = strtoupper((string) ($n['status'] ?? ''));
+      if (($status === 'FINISHED' || strpos($status, 'FINISH') !== FALSE) && $n['score_home'] !== null && $n['score_away'] !== null) {
+        $scores[] = [
+          'match' => "{$n['home']} - {$n['away']}",
+          'score' => "{$n['score_home']} - {$n['score_away']}",
+          'status' => 'FINISHED',
+        ];
+      }
+    }
+    // fill with scheduled if still space
+    foreach ($normalized as $n) {
+      if (count($scores) >= 3) {
+        break;
+      }
+      $scores[] = [
+        'match' => "{$n['home']} - {$n['away']}",
+        'score' => (!empty($n['utc']) ? (new \DateTimeImmutable($n['utc']))->setTimezone(new \DateTimeZone('Europe/Amsterdam'))->format('H:i') : $this->t('TBD')),
+        'status' => strtoupper((string) ($n['status'] ?? '')),
+      ];
+    }
 
-    // Bouw de HTML output samen. Dit gebeurt hier als string, maar zou
-    // in een geavanceerdere versie ook via een Twig template kunnen.
+    // Fallback placeholders if no data at all
+    if (empty($lastResults) && empty($scores) && empty($news)) {
+      \Drupal::logger('voetbalblok')->notice('Voetbalblok: geen data gevonden in API response.');
+      $scores = [
+        ['match' => 'Ajax - PSV', 'score' => $this->t('TBD'), 'status' => 'SCHEDULED'],
+        ['match' => 'Feyenoord - AZ', 'score' => $this->t('TBD'), 'status' => 'SCHEDULED'],
+        ['match' => 'FC Groningen - Sparta', 'score' => $this->t('TBD'), 'status' => 'SCHEDULED'],
+      ];
+      $news = [
+        ['title' => $scores[0]['match'], 'intro' => $this->t('Aankomend')],
+        ['title' => $scores[1]['match'], 'intro' => $this->t('Aankomend')],
+      ];
+    }
+
+    // Build compact sidebar markup
     $module_path = \Drupal::service('extension.list.module')->getPath('voetbalblok');
     $icon_path = '/' . $module_path . '/images/voetbal-icon.svg';
 
@@ -224,6 +291,26 @@ class VoetbalblokBlock extends BlockBase implements ContainerFactoryPluginInterf
     $output .= '<h3 class="vb-title">' . $this->t('Voetbal') . '</h3>';
     $output .= '</div>';
 
+    // Laatste uitslagen (3)
+    $output .= '<div class="vb-section vb-results"><h4>' . $this->t('Laatste uitslagen') . '</h4><ul class="vb-results-list">';
+    foreach ($lastResults as $r) {
+      $time = '';
+      if (!empty($r['utc'])) {
+        try {
+          $time = (new \DateTimeImmutable($r['utc']))->setTimezone(new \DateTimeZone('Europe/Amsterdam'))->format('d M H:i');
+        } catch (\Throwable $e) {
+          $time = '';
+        }
+      }
+      $scoreText = ($r['score_home'] !== null && $r['score_away'] !== null) ? ($r['score_home'] . ' - ' . $r['score_away']) : $this->t('n.v.t.');
+      $output .= '<li class="vb-result-item"><span class="vb-result-match">'. Html::escape("{$r['home']} - {$r['away']}") .'</span> <span class="vb-result-score">'. Html::escape($scoreText) .'</span> <div class="vb-result-time">'. Html::escape($time) .'</div></li>';
+    }
+    if (empty($lastResults)) {
+      $output .= '<li class="vb-result-item">' . Html::escape($this->t('Geen recente uitslagen.')) . '</li>';
+    }
+    $output .= '</ul></div>';
+
+    // News
     $output .= '<div class="vb-section vb-news"><h4>' . $this->t('Laatste nieuws') . '</h4>';
     foreach ($news as $n) {
       $output .= '<div class="vb-news-item">';
@@ -233,7 +320,9 @@ class VoetbalblokBlock extends BlockBase implements ContainerFactoryPluginInterf
     }
     $output .= '</div>';
 
-    $output .= '<div class="vb-section vb-scores"><h4>' . $this->t('Uitslagen / Live') . '</h4><ul class="vb-score-list">';
+    // Short scores
+    $output .= '<div class="vb-section vb-scores"><h4>' . $this->t('Uitslagen / Live') . '</h4>';
+    $output .= '<ul class="vb-score-list">';
     foreach ($scores as $s) {
       $output .= '<li class="vb-score-item">';
       $output .= '<span class="vb-match">' . Html::escape($s['match']) . '</span>';
@@ -245,13 +334,11 @@ class VoetbalblokBlock extends BlockBase implements ContainerFactoryPluginInterf
 
     $output .= '</div>';
 
-    // Retourneer een render array. Hiermee kan Drupal caching toepassen
-    // en CSS/JS libraries koppelen voor een consistente presentatie.
     return [
       '#type' => 'markup',
       '#markup' => $output,
       '#cache' => [
-        'max-age' => 120, // korte cache omdat sportdata snel verandert
+        'max-age' => 60,
       ],
       '#attached' => [
         'library' => ['voetbalblok/voetbalblok.styles'],

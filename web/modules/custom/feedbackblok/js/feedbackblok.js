@@ -10,7 +10,7 @@ function gfg(n) {
   for (let i = 0; i < n; i++) {
     stars[stars.length - 1 - i].classList.add('selected');
   }
-  document.getElementById("output").innerText = "Beoordeling is: " + n + "/5";
+  document.getElementById("output").innerText = "Je beoordeling is: " + n + "/5";
 }
 
 function remove() {

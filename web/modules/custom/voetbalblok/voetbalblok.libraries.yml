@@ -1,8 +1,4 @@
 voetbalblok.styles:
-  version: 1.0
   css:
     theme:
       css/voetbalblok.css: {}
-  assets:
-    images:
-      voetbal-icon.svg: images/voetbal-icon.svg
